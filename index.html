@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eye Drop Tracker (Corrected Prednisolone Start)</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            color: #333;
+            margin: 20px;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 800px;
+            margin: auto;
+            background: #fff;
+            padding: 20px 30px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1, h2 {
+            color: #0056b3;
+            text-align: center;
+        }
+        .medication-card {
+            background-color: #e9f5ff;
+            border: 1px solid #cce7ff;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        .medication-card h3 {
+            color: #0056b3;
+            margin-top: 0;
+        }
+        .medication-card p {
+            margin-bottom: 5px;
+        }
+        .last-taken, .next-due {
+            font-weight: bold;
+            color: #555;
+        }
+        .action-buttons {
+            display: flex;
+            flex-wrap: wrap; /* Allows buttons to wrap on smaller screens */
+            justify-content: flex-end;
+            margin-top: 10px;
+            gap: 10px; /* Space between buttons/inputs */
+        }
+        .action-buttons button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: background-color 0.3s ease;
+        }
+        .action-buttons button:hover {
+            background-color: #0056b3;
+        }
+        .alarm-status {
+            color: #d9534f;
+            font-weight: bold;
+            animation: blink 1s infinite; /* Blinking effect for alarm */
+        }
+        @keyframes blink {
+            0% { opacity: 1; }
+            50% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+        #current-time {
+            text-align: center;
+            font-size: 1.2em;
+            margin-bottom: 20px;
+            color: #007bff;
+        }
+        .dosage-info {
+            font-style: italic;
+            color: #666;
+            margin-top: 10px;
+            border-top: 1px dashed #ccc;
+            padding-top: 10px;
+        }
+        .prednisolone-schedule {
+            margin-top: 10px;
+            background-color: #f0f8ff;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #a0d8ff;
+        }
+        .prednisolone-schedule strong {
+            color: #004085;
+        }
+        .manual-time-group {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            flex-grow: 1; /* Allows it to take up available space */
+        }
+        .manual-time-group label {
+            white-space: nowrap; /* Prevents "Last Taken" from wrapping */
+        }
+        .manual-time-input {
+            padding: 5px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            flex-grow: 1; /* Allows input to fill available space */
+            min-width: 150px; /* Ensures input is not too small */
+        }
+        .alarm-dialog {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 100; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+            display: flex; /* Use flexbox to center content */
+            align-items: center; /* Center vertically */
+            justify-content: center; /* Center horizontally */
+        }
+        .alarm-dialog-content {
+            background-color: #fefefe;
+            margin: auto;
+            padding: 30px;
+            border: 1px solid #888;
+            width: 80%; /* Could be more responsive */
+            max-width: 400px;
+            box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2), 0 6px 20px 0 rgba(0,0,0,0.19);
+            animation-name: animatetop;
+            animation-duration: 0.4s;
+            text-align: center;
+            border-radius: 8px;
+        }
+        @keyframes animatetop {
+            from {top: -300px; opacity: 0}
+            to {top: 0; opacity: 1}
+        }
+        .alarm-dialog-content h2 {
+            margin-top: 0;
+            color: #d9534f;
+        }
+        .alarm-dialog-content button {
+            background-color: #d9534f;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+            margin-top: 15px;
+            transition: background-color 0.3s ease;
+        }
+        .alarm-dialog-content button:hover {
+            background-color: #c9302c;
+        }
+        .summary-button {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+            margin-top: 20px;
+            display: block;
+            width: fit-content;
+            margin-left: auto;
+            margin-right: auto;
+            transition: background-color 0.3s ease;
+        }
+        .summary-button:hover {
+            background-color: #218838;
+        }
+
+        /* Print specific styles */
+        @media print {
+            body {
+                background-color: #fff;
+                margin: 0;
+            }
+            .container {
+                box-shadow: none;
+                margin: 0;
+                padding: 10px;
+            }
+            .summary-button, .action-buttons, #current-time {
+                display: none; /* Hide buttons and current time in print */
+            }
+            .medication-card {
+                border: 1px solid #ccc;
+                page-break-inside: avoid; /* Avoid breaking cards across pages */
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Eye Drop Medication Tracker</h1>
+        <div id="current-time"></div>
+
+        <p>This tracker helps you manage your eye drop schedule. Set the "Last Taken" time manually or use "Now". The "Next Due" time will auto-calculate, and an alarm will sound when due.</p>
+        <p><strong>Important:</strong> Always follow your doctor's instructions. This tool is for tracking assistance only.</p>
+
+        <div id="medication-list">
+            </div>
+
+        <button class="summary-button" onclick="generateDailySummary()">Generate Daily Summary (Print/Save)</button>
+        <p style="text-align: center; margin-top: 15px; font-size: 0.9em; color: #666;">
+            To save a document, use your browser's print function and select "Save as PDF".<br>
+            For calendar integration, manually add reminders to your preferred calendar app.
+        </p>
+    </div>
+
+    <audio id="alarm-sound" src="https://www.soundjay.com/buttons/beep-07a.mp3" preload="auto"></audio>
+
+    <div id="alarm-dialog" class="alarm-dialog" style="display: none;">
+        <div class="alarm-dialog-content">
+            <h2>Time to take your eye drops!</h2>
+            <p id="alarm-med-name"></p>
+            <p>Please take your dose now.</p>
+            <button onclick="confirmAlarm()">OK, I've taken it</button>
+        </div>
+    </div>
+
+    <script>
+        // Store medication data
+        const medications = [
+            {
+                id: 'apdrops',
+                name: 'Apdrops Eye Drop',
+                intervalHours: 6,
+                eye: 'Left eye',
+                dosage: '1 drop every 6 hours',
+                lastTaken: new Date('2025-07-05T04:30:00'),
+                nextDue: null,
+                alarmTimeoutId: null,
+                isAlarmActive: false
+            },
+            {
+                id: 'refreshliquigel',
+                name: 'Refresh Liquigel',
+                intervalHours: 12,
+                eye: 'Both eyes',
+                dosage: '1 drop every 12 hours',
+                lastTaken: new Date('2025-07-05T05:15:00'),
+                nextDue: null,
+                alarmTimeoutId: null,
+                isAlarmActive: false
+            },
+            {
+                id: 'betalol',
+                name: 'Betalol Eye Drop',
+                intervalHours: 12,
+                eye: 'Both eyes',
+                dosage: '1 drop every 12 hours',
+                lastTaken: new Date('2025-07-04T18:30:00'), // 6:30 PM
+                nextDue: null,
+                alarmTimeoutId: null,
+                isAlarmActive: false
+            },
+            {
+                id: 'prednisolone',
+                name: 'Prednisolone Eye Drop',
+                intervalHours: null, // This will be determined by the schedule
+                eye: 'Both eyes',
+                dosage: 'Tapering schedule (see below)',
+                lastTaken: new Date('2025-07-05T05:00:00'),
+                nextDue: null,
+                alarmTimeoutId: null,
+                isAlarmActive: false,
+                schedule: [
+                    { durationDays: 7, intervalHours: 6, label: "Every 6 hours" },
+                    { durationDays: 7, intervalHours: 8, label: "Every 8 hours" },
+                    { durationDays: 7, intervalHours: 12, label: "Every 12 hours" },
+                    { durationDays: 7, intervalHours: 24, label: "Every 24 hours" }
+                ],
+                // The absolute start date of the entire tapering schedule (July 2nd, 8:00 AM)
+                scheduleStartDate: new Date('2025-07-02T08:00:00')
+            }
+        ];
+
+        const alarmSound = document.getElementById('alarm-sound');
+        const medicationListDiv = document.getElementById('medication-list');
+        const currentTimeDiv = document.getElementById('current-time');
+        const alarmDialog = document.getElementById('alarm-dialog');
+        const alarmMedName = document.getElementById('alarm-med-name');
+
+        let activeAlarmMedId = null;
+
+        function formatDateTime(date) {
+            if (!date) return 'Not yet recorded';
+            const options = { year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: 'numeric', hour12: true };
+            return date.toLocaleString('en-US', options);
+        }
+
+        function toDateTimeLocal(date) {
+            if (!date) return '';
+            const year = date.getFullYear();
+            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+            const day = date.getDate().toString().padStart(2, '0');
+            const hours = date.getHours().toString().padStart(2, '0');
+            const minutes = date.getMinutes().toString().padStart(2, '0');
+            return `${year}-${month}-${day}T${hours}:${minutes}`;
+        }
+
+        function saveMedications() {
+            localStorage.setItem('medications', JSON.stringify(medications.map(med => ({
+                id: med.id,
+                lastTaken: med.lastTaken ? med.lastTaken.toISOString() : null,
+                // For prednisolone, only save scheduleStartDate, as currentScheduleIndex is derived
+                scheduleStartDate: med.id === 'prednisolone' && med.scheduleStartDate ? med.scheduleStartDate.toISOString() : null
+            }))));
+        }
+
+        function loadMedications() {
+            const savedState = localStorage.getItem('medications');
+            if (savedState) {
+                const parsedState = JSON.parse(savedState);
+                parsedState.forEach(savedMed => {
+                    const med = medications.find(m => m.id === savedMed.id);
+                    if (med) {
+                        med.lastTaken = savedMed.lastTaken ? new Date(savedMed.lastTaken) : null;
+                        if (med.id === 'prednisolone') {
+                            // Load scheduleStartDate, if not found, use the default from the 'medications' array.
+                            // The initial default in the array is now explicitly July 2nd.
+                            med.scheduleStartDate = savedMed.scheduleStartDate ? new Date(savedMed.scheduleStartDate) : medications.find(m => m.id === 'prednisolone').scheduleStartDate;
+                        }
+                    }
+                });
+            } else {
+                // If no saved state, use default values and save them initially
+                saveMedications();
+            }
+        }
+
+        // Function to determine the current Prednisolone phase based on the current date
+        function getCurrentPrednisolonePhase(med, now) {
+            if (!med.scheduleStartDate) {
+                // Should not happen as we default it now, but as a safeguard
+                return { index: 0, phase: med.schedule[0], daysElapsed: 0 };
+            }
+
+            // Calculate days elapsed from scheduleStartDate to the 'now' date
+            // We need to compare dates without time components for accurate day difference
+            const startOfDaySchedule = new Date(med.scheduleStartDate.getFullYear(), med.scheduleStartDate.getMonth(), med.scheduleStartDate.getDate());
+            const startOfDayNow = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+            const diffTime = Math.abs(startOfDayNow.getTime() - startOfDaySchedule.getTime());
+            const daysElapsedFromScheduleStart = Math.floor(diffTime / (24 * 60 * 60 * 1000));
+
+            let cumulativeDays = 0;
+            for (let i = 0; i < med.schedule.length; i++) {
+                const phase = med.schedule[i];
+                if (daysElapsedFromScheduleStart < cumulativeDays + phase.durationDays) {
+                    return { index: i, phase: phase, daysElapsed: daysElapsedFromScheduleStart - cumulativeDays };
+                }
+                cumulativeDays += phase.durationDays;
+            }
+
+            // If 'now' is beyond the last phase, return the last phase
+            return { index: med.schedule.length - 1, phase: med.schedule[med.schedule.length - 1], daysElapsed: daysElapsedFromScheduleStart - (cumulativeDays - med.schedule[med.schedule.length - 1].durationDays) };
+        }
+
+
+        function calculateNextDue(med) {
+            if (!med.lastTaken) return null;
+
+            if (med.id === 'prednisolone') {
+                // Get the current phase based on the current date
+                const now = new Date();
+                const { phase } = getCurrentPrednisolonePhase(med, now);
+                if (!phase) return null; // Should not happen if schedule is defined
+
+                return new Date(med.lastTaken.getTime() + phase.intervalHours * 60 * 60 * 1000);
+
+            } else {
+                return new Date(med.lastTaken.getTime() + med.intervalHours * 60 * 60 * 1000);
+            }
+        }
+
+        function renderMedications() {
+            medicationListDiv.innerHTML = '';
+            const now = new Date();
+
+            medications.forEach(med => {
+                if (med.alarmTimeoutId) {
+                    clearTimeout(med.alarmTimeoutId);
+                    med.alarmTimeoutId = null;
+                }
+
+                med.nextDue = calculateNextDue(med);
+
+                let alarmStatus = '';
+                if (med.nextDue && med.nextDue <= now && !med.isAlarmActive) {
+                    alarmStatus = '<span class="alarm-status">DUE NOW! (Alarm Active)</span>';
+                    med.isAlarmActive = true;
+                    showAlarmDialog(med.id);
+                } else if (med.nextDue && med.nextDue <= now && med.isAlarmActive) {
+                    alarmStatus = '<span class="alarm-status">DUE NOW! (Alarm Active)</span>';
+                }
+                else if (med.nextDue && med.nextDue > now) {
+                    const timeToNextDue = med.nextDue.getTime() - now.getTime();
+                    if (timeToNextDue > 0) {
+                        if (!med.alarmTimeoutId) {
+                            med.alarmTimeoutId = setTimeout(() => {
+                                med.isAlarmActive = true;
+                                renderMedications();
+                            }, timeToNextDue);
+                        }
+                    }
+                }
+
+                let prednisoloneScheduleInfo = '';
+                if (med.id === 'prednisolone') {
+                    const { index, phase, daysElapsed } = getCurrentPrednisolonePhase(med, now);
+                    med.currentScheduleIndex = index; // Update the index in the object for consistency
+
+                    if (phase) {
+                        prednisoloneScheduleInfo = `
+                            <div class="prednisolone-schedule">
+                                <strong>Current Schedule Phase:</strong> ${phase.label} (every ${phase.intervalHours} hours)<br>
+                                ${med.scheduleStartDate ? `<strong>Schedule Started (Overall):</strong> ${formatDateTime(med.scheduleStartDate)}<br>` : ''}
+                                ${phase.durationDays ? `<strong>Days in this phase:</strong> ${daysElapsed} / ${phase.durationDays}<br>` : ''}
+                                ${phase.durationDays && daysElapsed >= phase.durationDays ? `<strong>Transition to next phase recommended!</strong>` : ''}
+                            </div>
+                        `;
+                    } else {
+                         prednisoloneScheduleInfo = '<div class="prednisolone-schedule"><strong>Prednisolone schedule completed.</strong> Please consult your doctor.</div>';
+                    }
+                }
+
+                const cardHtml = `
+                    <div class="medication-card" data-id="${med.id}">
+                        <h3>${med.name}</h3>
+                        <p><strong>Applies to:</strong> ${med.eye}</p>
+                        <p class="dosage-info">Dosage: ${med.dosage}</p>
+                        ${prednisoloneScheduleInfo}
+                        <div class="manual-time-group">
+                            <label for="manual-${med.id}">Last Taken:</label>
+                            <input type="datetime-local" class="manual-time-input" id="manual-${med.id}" value="${toDateTimeLocal(med.lastTaken)}"
+                                onchange="updateLastTakenTime('${med.id}', this.value)">
+                            <button onclick="updateLastTakenTime('${med.id}', null, true)">Now</button>
+                        </div>
+                        <p class="next-due">Next Due: ${formatDateTime(med.nextDue)} ${alarmStatus}</p>
+                    </div>
+                `;
+                medicationListDiv.innerHTML += cardHtml;
+            });
+        }
+
+        function showAlarmDialog(medId) {
+            const med = medications.find(m => m.id === medId);
+            if (med) {
+                activeAlarmMedId = medId;
+                alarmMedName.textContent = med.name;
+                alarmDialog.style.display = 'flex';
+                playAlarmSound();
+
+                if (Notification.permission === 'default') {
+                    Notification.requestPermission();
+                } else if (Notification.permission === 'granted') {
+                    new Notification('Eye Drop Reminder', {
+                        body: `Time to take your ${med.name}!`,
+                        icon: 'https://cdn-icons-png.flaticon.com/512/3067/3067576.png'
+                    });
+                }
+            }
+        }
+
+        function playAlarmSound() {
+            alarmSound.loop = true;
+            alarmSound.currentTime = 0;
+            alarmSound.play().catch(e => console.error("Error playing alarm sound:", e));
+        }
+
+        function stopAlarm() {
+            alarmSound.pause();
+            alarmSound.currentTime = 0;
+            alarmSound.loop = false;
+            alarmDialog.style.display = 'none';
+            if (activeAlarmMedId) {
+                const med = medications.find(m => m.id === activeAlarmMedId);
+                if (med) {
+                    med.isAlarmActive = false;
+                }
+                activeAlarmMedId = null;
+            }
+        }
+
+        function confirmAlarm() {
+            if (activeAlarmMedId) {
+                updateLastTakenTime(activeAlarmMedId, null, true);
+                stopAlarm();
+            }
+        }
+
+        function updateLastTakenTime(id, dateTimeString, useCurrentTime = false) {
+            const med = medications.find(m => m.id === id);
+            if (med) {
+                let newLastTaken;
+                if (useCurrentTime) {
+                    newLastTaken = new Date();
+                } else if (dateTimeString) {
+                    newLastTaken = new Date(dateTimeString);
+                    if (isNaN(newLastTaken.getTime())) {
+                        alert("Invalid date/time entered for " + med.name);
+                        return;
+                    }
+                } else {
+                    console.error("updateLastTakenTime called without valid time source.");
+                    return;
+                }
+
+                med.lastTaken = newLastTaken;
+                stopAlarm();
+
+                saveMedications();
+                renderMedications(); // Re-render to update next due times and prednisolone phase
+            }
+        }
+
+        function updateCurrentTime() {
+            const now = new Date();
+            currentTimeDiv.textContent = `Current Time: ${formatDateTime(now)}`;
+        }
+
+        function generateDailySummary() {
+            // This function will trigger the browser's print dialog
+            window.print();
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadMedications();
+            renderMedications();
+            updateCurrentTime();
+            setInterval(updateCurrentTime, 1000);
+            setInterval(renderMedications, 5000);
+        });
+
+        alarmDialog.addEventListener('click', (event) => {
+            if (event.target === alarmDialog) {
+                stopAlarm();
+            }
+        });
+
+        window.addEventListener('beforeunload', () => {
+            stopAlarm();
+        });
+    </script>
+</body>
+</html>
