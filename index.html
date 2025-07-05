@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Eye Drop Tracker (Corrected Prednisolone Start)</title>
+    <title>Eye Drop Tracker (Auto Update on Alarm)</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -329,27 +329,20 @@
                     if (med) {
                         med.lastTaken = savedMed.lastTaken ? new Date(savedMed.lastTaken) : null;
                         if (med.id === 'prednisolone') {
-                            // Load scheduleStartDate, if not found, use the default from the 'medications' array.
-                            // The initial default in the array is now explicitly July 2nd.
                             med.scheduleStartDate = savedMed.scheduleStartDate ? new Date(savedMed.scheduleStartDate) : medications.find(m => m.id === 'prednisolone').scheduleStartDate;
                         }
                     }
                 });
             } else {
-                // If no saved state, use default values and save them initially
-                saveMedications();
+                saveMedications(); // If no saved state, use default values and save them initially
             }
         }
 
-        // Function to determine the current Prednisolone phase based on the current date
         function getCurrentPrednisolonePhase(med, now) {
             if (!med.scheduleStartDate) {
-                // Should not happen as we default it now, but as a safeguard
                 return { index: 0, phase: med.schedule[0], daysElapsed: 0 };
             }
 
-            // Calculate days elapsed from scheduleStartDate to the 'now' date
-            // We need to compare dates without time components for accurate day difference
             const startOfDaySchedule = new Date(med.scheduleStartDate.getFullYear(), med.scheduleStartDate.getMonth(), med.scheduleStartDate.getDate());
             const startOfDayNow = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
@@ -365,7 +358,6 @@
                 cumulativeDays += phase.durationDays;
             }
 
-            // If 'now' is beyond the last phase, return the last phase
             return { index: med.schedule.length - 1, phase: med.schedule[med.schedule.length - 1], daysElapsed: daysElapsedFromScheduleStart - (cumulativeDays - med.schedule[med.schedule.length - 1].durationDays) };
         }
 
@@ -374,10 +366,9 @@
             if (!med.lastTaken) return null;
 
             if (med.id === 'prednisolone') {
-                // Get the current phase based on the current date
                 const now = new Date();
                 const { phase } = getCurrentPrednisolonePhase(med, now);
-                if (!phase) return null; // Should not happen if schedule is defined
+                if (!phase) return null;
 
                 return new Date(med.lastTaken.getTime() + phase.intervalHours * 60 * 60 * 1000);
 
@@ -391,6 +382,7 @@
             const now = new Date();
 
             medications.forEach(med => {
+                // Clear any existing timeout for this medication before re-rendering
                 if (med.alarmTimeoutId) {
                     clearTimeout(med.alarmTimeoutId);
                     med.alarmTimeoutId = null;
@@ -399,20 +391,36 @@
                 med.nextDue = calculateNextDue(med);
 
                 let alarmStatus = '';
+                // Check if medication is due and alarm is not already active
                 if (med.nextDue && med.nextDue <= now && !med.isAlarmActive) {
+                    // *** Auto-update lastTaken when alarm triggers ***
+                    // Update lastTaken to the actual nextDue time (or current time if slightly past)
+                    med.lastTaken = new Date(med.nextDue.getTime()); // Set to the exact nextDue time
+                    // If the current time is significantly past nextDue, use current time
+                    if (now.getTime() - med.nextDue.getTime() > 1000 * 60) { // If more than 1 minute past due
+                        med.lastTaken = now;
+                    }
+
+                    // Recalculate nextDue based on the new lastTaken
+                    med.nextDue = calculateNextDue(med);
+                    
+                    saveMedications(); // Save the updated lastTaken
+                    
                     alarmStatus = '<span class="alarm-status">DUE NOW! (Alarm Active)</span>';
                     med.isAlarmActive = true;
                     showAlarmDialog(med.id);
                 } else if (med.nextDue && med.nextDue <= now && med.isAlarmActive) {
+                    // If it's already due and alarm is active, just keep showing status
                     alarmStatus = '<span class="alarm-status">DUE NOW! (Alarm Active)</span>';
                 }
                 else if (med.nextDue && med.nextDue > now) {
+                    // If not due yet, set a new timeout for the alarm
                     const timeToNextDue = med.nextDue.getTime() - now.getTime();
                     if (timeToNextDue > 0) {
                         if (!med.alarmTimeoutId) {
                             med.alarmTimeoutId = setTimeout(() => {
-                                med.isAlarmActive = true;
-                                renderMedications();
+                                med.isAlarmActive = true; // Mark alarm as active
+                                renderMedications(); // Rerender to trigger the alarm logic
                             }, timeToNextDue);
                         }
                     }
@@ -421,7 +429,7 @@
                 let prednisoloneScheduleInfo = '';
                 if (med.id === 'prednisolone') {
                     const { index, phase, daysElapsed } = getCurrentPrednisolonePhase(med, now);
-                    med.currentScheduleIndex = index; // Update the index in the object for consistency
+                    med.currentScheduleIndex = index;
 
                     if (phase) {
                         prednisoloneScheduleInfo = `
@@ -446,7 +454,7 @@
                         <div class="manual-time-group">
                             <label for="manual-${med.id}">Last Taken:</label>
                             <input type="datetime-local" class="manual-time-input" id="manual-${med.id}" value="${toDateTimeLocal(med.lastTaken)}"
-                                onchange="updateLastTakenTime('${med.id}', this.value)">
+                                onchange="updateLastTakenTime('${med.id}', this.value, false)">
                             <button onclick="updateLastTakenTime('${med.id}', null, true)">Now</button>
                         </div>
                         <p class="next-due">Next Due: ${formatDateTime(med.nextDue)} ${alarmStatus}</p>
@@ -496,10 +504,10 @@
         }
 
         function confirmAlarm() {
-            if (activeAlarmMedId) {
-                updateLastTakenTime(activeAlarmMedId, null, true);
-                stopAlarm();
-            }
+            // When "OK" is clicked, stop the alarm and refresh the display.
+            // lastTaken is already updated when the alarm triggers.
+            stopAlarm();
+            renderMedications(); // Re-render to ensure everything is up-to-date
         }
 
         function updateLastTakenTime(id, dateTimeString, useCurrentTime = false) {
@@ -520,10 +528,10 @@
                 }
 
                 med.lastTaken = newLastTaken;
-                stopAlarm();
+                stopAlarm(); // Stop alarm if active for this med (e.g., if manually taking it early)
 
                 saveMedications();
-                renderMedications(); // Re-render to update next due times and prednisolone phase
+                renderMedications();
             }
         }
 
@@ -533,27 +541,26 @@
         }
 
         function generateDailySummary() {
-            // This function will trigger the browser's print dialog
             window.print();
         }
 
-        // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             loadMedications();
             renderMedications();
             updateCurrentTime();
             setInterval(updateCurrentTime, 1000);
-            setInterval(renderMedications, 5000);
+            setInterval(renderMedications, 5000); // Check for due medications every 5 seconds
         });
 
         alarmDialog.addEventListener('click', (event) => {
             if (event.target === alarmDialog) {
+                // If user clicks outside the dialog, treat as dismissed
                 stopAlarm();
             }
         });
 
         window.addEventListener('beforeunload', () => {
-            stopAlarm();
+            stopAlarm(); // Stop any playing alarms when closing the tab
         });
     </script>
 </body>
